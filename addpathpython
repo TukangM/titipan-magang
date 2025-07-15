@@ -1,0 +1,105 @@
+<#
+.SYNOPSIS
+    Skrip ini memastikan eksekusi dengan hak administrator dan melakukan tugas di lingkungan lab.
+.DESCRIPTION
+    Skrip ini dirancang untuk dijalankan melalui Veyon. Ini akan memeriksa hak administrator
+    dan, jika diperlukan, akan mencoba untuk mempromosikan dirinya sendiri untuk dijalankan sebagai admin.
+    Setelah mendapatkan hak admin, ia dapat menjalankan tugas yang ditentukan, misalnya, aktivasi Windows/Office.
+.NOTES
+    Untuk Veyon, pastikan Veyon Master dikonfigurasi untuk menjalankan perintah dengan hak administrator
+    di PC klien untuk eksekusi yang paling lancar.
+#>
+
+# --- Bagian 1: Pengecekan dan Promosi Hak Administrator ---
+$scriptName = $MyInvocation.MyCommand.Definition
+
+# Periksa apakah skrip sedang berjalan sebagai Administrator
+function Test-IsAdministrator {
+    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-IsAdministrator)) {
+    Write-Host "?? Skrip tidak berjalan sebagai Administrator. Mencoba memulai ulang dengan hak Administrator..." -ForegroundColor Yellow
+
+    # Dapatkan argumen yang diteruskan ke skrip saat ini
+    $arguments = $MyInvocation.MyCommand.Definition -replace "`""","`"`"" # Escape quotes for Start-Process
+
+    # Coba mulai ulang skrip dengan hak administrator
+    try {
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptName`" $arguments" -Verb RunAs -Wait
+        # Jika berhasil memulai ulang, skrip ini (yang non-admin) akan keluar
+        exit 0
+    } catch {
+        Write-Error "?? Gagal memulai ulang skrip dengan hak Administrator: $($_.Exception.Message)"
+        Write-Host "Bantuan: Pastikan Anda memiliki izin yang cukup atau jalankan Veyon sebagai Administrator." -ForegroundColor Red
+        exit 1 # Keluar dengan kode error
+    }
+}
+
+Write-Host "? Skrip berjalan dengan hak Administrator." -ForegroundColor Green
+---
+
+# --- Bagian 2: Fungsi Bantu (Opsional, dari skrip MAS asli) ---
+
+# Fungsi untuk memeriksa Antivirus pihak ketiga
+function Check3rdAV {
+    try {
+        $avList = Get-CimInstance -Namespace root\SecurityCenter2 -Class AntiVirusProduct | Where-Object { $_.displayName -notlike '*windows*' } | Select-Object -ExpandProperty displayName
+        if ($avList) {
+            Write-Host '??? Antivirus pihak ketiga mungkin memblokir tindakan: ' -ForegroundColor White -BackgroundColor Blue -NoNewline
+            Write-Host " $($avList -join ', ')" -ForegroundColor DarkRed -BackgroundColor White
+        }
+    } catch {
+        Write-Warning "Gagal memeriksa antivirus: $($_.Exception.Message)"
+    }
+}
+
+---
+
+# --- Bagian 3: Logika Utama Skrip Anda (yang perlu hak Admin) ---
+
+# Contoh tindakan yang memerlukan hak Administrator
+Write-Host "`n?? Memulai tugas yang memerlukan hak Administrator..."
+
+# --- Simulasi Contoh Tugas yang Memerlukan Admin ---
+
+# Contoh: Menambahkan jalur Python ke variabel Path SYSTEM (jika memang diperlukan, ini hanya contoh)
+# Perhatikan: Ini akan memodifikasi Path sistem. Hati-hati menggunakannya.
+# Jika Anda HANYA butuh ini, maka skrip yang Anda berikan sebelumnya sudah cukup.
+# Namun, konteksnya adalah "seperti MAS", jadi ini hanya ilustrasi.
+$pythonPath = 'C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313'
+$currentSystemPath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+
+if (-not ($currentSystemPath -like "*$pythonPath*")) {
+    Write-Host "?? Menambahkan jalur Python '$pythonPath' ke variabel lingkungan PATH sistem." -ForegroundColor Cyan
+    try {
+        [System.Environment]::SetEnvironmentVariable('Path', $currentSystemPath + ";$pythonPath", 'Machine')
+        Write-Host "? Jalur Python berhasil ditambahkan." -ForegroundColor Green
+    } catch {
+        Write-Error "?? Gagal menambahkan jalur Python: $($_.Exception.Message)"
+    }
+} else {
+    Write-Host "?? Jalur Python '$pythonPath' sudah ada di variabel lingkungan PATH sistem." -ForegroundColor DarkGray
+}
+
+# Contoh: Menjalankan skrip MAS dari GitHub (diperlukan admin)
+# Anda bisa memodifikasi bagian ini untuk mengunduh dan menjalankan skrip aktivasi MAS
+# seperti yang Anda inginkan, dengan pemeriksaan integritas dan lain-lain.
+# Untuk kesederhanaan contoh ini, kita hanya akan mensimulasikannya.
+Write-Host "`n?? Mensimulasikan pengunduhan dan eksekusi skrip MAS..."
+
+# Dalam skenario nyata, Anda akan memiliki kode di sini untuk:
+# 1. Mengunduh skrip MAS (seperti Invoke-WebRequest di skrip awal Anda)
+# 2. Melakukan hash check (SANGAT DIREKOMENDASIKAN untuk keamanan)
+# 3. Menjalankan skrip MAS (Start-Process MAS_AIO.cmd)
+# 4. Melakukan cleanup
+
+# PANGGIL FUNGSI CHECK AV DI SINI JIKA DIINGINKAN
+Check3rdAV
+
+Write-Host "?? Tugas yang memerlukan hak Administrator selesai!" -ForegroundColor Green
+
+# --- Bagian 4: Pembersihan (jika ada file sementara) ---
+# Misalnya, jika Anda mengunduh file temp, hapus di sini.
+# if (Test-Path $TempMASPath) { Remove-Item $TempMASPath -ErrorAction SilentlyContinue }
