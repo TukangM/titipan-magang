@@ -1,21 +1,15 @@
 $tempFile = "$env:TEMP\rerun.bat"
-$batchContent = @'
-@echo off
-NET SESSION >nul 2>&1
-if %errorLevel% neq 0 (
-    powershell -Command "Start-Process '%~dpnx0' -Verb RunAs"
-    exit /b
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-"[System.Environment]::SetEnvironmentVariable('Path', [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313', 'Machine'); Write-Host 'Python path has been added successfully!' -ForegroundColor Green; pause"
-'@
 
 try {
-    # Download batch file content
-    $batchContent | Out-File -FilePath $tempFile -Encoding ASCII
+    # Download rerun.bat from your repository
+    Invoke-WebRequest -Uri "https://github.com/TukangM/titipan-magang/raw/main/rerun.bat" -OutFile $tempFile
     
-    # Execute the batch file
-    Start-Process -FilePath $tempFile -Wait
+    # Create the PowerShell command that will be executed
+    $psCommand = "[System.Environment]::SetEnvironmentVariable('Path', [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313', 'Machine'); Write-Host 'Python path has been added successfully!' -ForegroundColor Green; pause"
+    
+    # Execute rerun.bat with the PowerShell command as parameter
+    Start-Process -FilePath $tempFile -ArgumentList "-command `"$psCommand`"" -Wait
+
 } finally {
     # Cleanup
     if (Test-Path $tempFile) {
