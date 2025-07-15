@@ -1,21 +1,24 @@
-$c = @'
-$AdminCheck = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (!($AdminCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command {
-        [System.Environment]::SetEnvironmentVariable('Path', 
-            [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + 
-            ';C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313', 'Machine');
-        Write-Host 'Python path has been added successfully!' -ForegroundColor Green;
-        pause; pause
-    }" -Verb RunAs
-    exit
-}
-
-[System.Environment]::SetEnvironmentVariable('Path', 
-    [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + 
-    ';C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313', 'Machine')
-Write-Host "Python path has been added successfully!" -ForegroundColor Green
-pause
-pause
+$tempFile = "$env:TEMP\rerun.bat"
+$batchContent = @'
+@echo off
+NET SESSION >nul 2>&1
+if %errorLevel% neq 0 (
+    powershell -Command "Start-Process '%~dpnx0' -Verb RunAs"
+    exit /b
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+"[System.Environment]::SetEnvironmentVariable('Path', [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\Users\Roki Garang\AppData\Local\Programs\Python\Python313', 'Machine'); Write-Host 'Python path has been added successfully!' -ForegroundColor Green; pause"
 '@
-iex $c
+
+try {
+    # Download batch file content
+    $batchContent | Out-File -FilePath $tempFile -Encoding ASCII
+    
+    # Execute the batch file
+    Start-Process -FilePath $tempFile -Wait
+} finally {
+    # Cleanup
+    if (Test-Path $tempFile) {
+        Remove-Item $tempFile -Force
+    }
+}
